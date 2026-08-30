@@ -35,7 +35,13 @@ def test_pull_profiles_writes_profile_and_stats(local_cfg, fake_client):
     profile = json.loads((base / "profiles" / "hikaru.json").read_text(encoding="utf-8"))
     assert profile["username"] == "hikaru"
     assert profile["_source_endpoint"] == "player/hikaru"
-    assert (base / "stats" / "hikaru.json").exists()
+
+    # The /stats payload has no username of its own; ingestion stamps one so
+    # Silver can join on a business key instead of parsing a lineage field.
+    stats = json.loads((base / "stats" / "hikaru.json").read_text(encoding="utf-8"))
+    assert stats["username"] == "hikaru"
+    assert stats["chess_blitz"]["last"]["rating"] == 3221
+    assert stats["_source_endpoint"] == "player/hikaru/stats"
 
 
 def test_missing_player_counted_not_fatal(local_cfg, fake_client):
@@ -45,17 +51,17 @@ def test_missing_player_counted_not_fatal(local_cfg, fake_client):
 
 def test_pull_archives_partitions_and_is_idempotent(local_cfg, fake_client):
     first = pull_game_archives.run(["hikaru"], months=1)
-    assert first == {"players": 1, "partitions": 1, "games": 2}
+    assert first == {"players": 1, "partitions": 1, "games": 3}
 
     part = (
         Path(local_cfg["storage"]["local_root"])
         / "raw" / "games" / "year=2026" / "month=08" / "player=hikaru.json"
     )
     games = _read_ndjson(part)
-    assert len(games) == 2
+    assert len(games) == 3
     assert games[0]["url"].endswith("98234571")
     assert "_ingested_at" in games[0]
 
     # Re-run overwrites the same partition — no duplication.
     pull_game_archives.run(["hikaru"], months=1)
-    assert len(_read_ndjson(part)) == 2
+    assert len(_read_ndjson(part)) == 3

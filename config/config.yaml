@@ -6,6 +6,7 @@
 project:
   name: chess-analytics
   gcp_project_id: chess-analytics-dev      # placeholder; set real id via CHESS_PROJECT__GCP_PROJECT_ID
+  bq_location: US                          # keep BQ datasets + GCS bucket co-located
 
 api:
   base_url: https://api.chess.com/pub

@@ -61,7 +61,11 @@ def run(usernames: list[str]) -> dict[str, int]:
 
         stats = client.get_player_stats(u)
         if stats is not None:
-            storage.write_json(f"players/stats/{u}.json", stamp_lineage(stats, f"player/{u}/stats"))
+            # The /stats response carries no username, so stamp the join key
+            # explicitly rather than making Silver parse it back out of
+            # _source_endpoint (a lineage field, not a business key).
+            record = stamp_lineage({"username": u, **stats}, f"player/{u}/stats")
+            storage.write_json(f"players/stats/{u}.json", record)
             ok_stats += 1
 
     summary = {"profiles": ok_profiles, "stats": ok_stats, "missing": missing}

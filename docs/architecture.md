@@ -43,11 +43,34 @@ Pub/Sub — the standard "replay real data as live events" pattern.
 
 - **Bronze** — external tables over raw NDJSON in GCS; verbatim payload +
   lineage. See [`schemas/bronze_schemas.md`](schemas/bronze_schemas.md).
-- **Silver** — `clean_games` (typed, deduped on game id, result/termination
-  derived from PGN + per-side result codes), `dim_players`, `game_moves`,
-  `openings_dim`.
+- **Silver** — `clean_games` (typed, deduped on game id via MERGE),
+  `player_game_results` (view, player grain), `openings_dim`, `dim_players`.
 - **Gold** — `daily_player_kpis`, `opening_win_rates` (by Elo bracket),
   `elo_trend_weekly`, `player_cohorts`, `time_control_meta`.
+
+Design detail for both: [`schemas/silver_gold_schemas.md`](schemas/silver_gold_schemas.md).
+
+## Orchestration
+
+One DAG, [`airflow/dags/chess_daily_batch.py`](../airflow/dags/chess_daily_batch.py):
+
+```
+start -> ingest_chesscom -> bronze -> create_ops_tables
+                                        |-> silver_clean_games -> player_game_results -> gold(daily, elo, cohorts)
+                                        |                      \-> openings_dim ------> gold(opening_win_rates)
+                                        \-> silver_dim_players -----------------------> gold(cohorts)
+                                                                                        gold -> run_dq_checks -> dq_gate -> end
+```
+
+There is **no separate backfill DAG**. Every task is parameterised by the run's
+data interval and every write is window-scoped and idempotent, so a range is just
+`airflow dags backfill chess_daily_batch -s ... -e ...`. A second DAG would
+duplicate the graph and then drift from it.
+
+Composer costs ~$300/month, so [`scripts/run_batch.py`](../scripts/run_batch.py)
+runs the identical SQL in the identical order without Airflow — the free-tier
+path. `--dry-run` validates every statement against BigQuery at no cost and is
+the intended pre-deploy gate.
 
 ## Engineering practices (the point of the project)
 
@@ -67,7 +90,8 @@ Pub/Sub — the standard "replay real data as live events" pattern.
 
 1. **Foundation & ingestion** — GCP/APIs, pull titled players + profiles +
    archives, land in GCS, Bronze schemas. ✅
-2. **Batch pipeline** — Bronze→Silver→Gold SQL, Airflow DAG, idempotent MERGE.
+2. **Batch pipeline** — Bronze→Silver→Gold SQL, Airflow DAG, idempotent MERGE,
+   DQ assertion framework, PGN parser. ✅
 3. **Streaming** — simulator on Cloud Run, Pub/Sub, Dataflow streaming job.
 4. **DQ, monitoring, SCD-2** — assertion framework, dim_players, DLQ, alerts.
 5. **Analytics & dashboards** — 4 Looker Studio dashboards.

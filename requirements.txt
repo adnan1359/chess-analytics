@@ -12,3 +12,5 @@ google-cloud-pubsub==2.23.0
 
 # Dev / test
 pytest==8.3.3
+# Parses the BigQuery SQL offline so typos are caught without a GCP connection.
+sqlglot==25.24.0

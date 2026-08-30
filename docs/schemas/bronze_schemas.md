@@ -65,6 +65,11 @@ Stats: per-format objects (`chess_rapid`, `chess_blitz`, `chess_bullet`, …)
 each with `last`/`best`/`record{win,loss,draw}`. Feeds the SCD-2 `dim_players`
 rating history in Sprint 4.
 
+> **`username` on stats is added by us.** The `/stats` response carries no
+> username. Ingestion stamps one in (`pull_player_profiles.py`) so Silver joins
+> on a business key rather than regex-parsing it back out of `_source_endpoint`,
+> which is a lineage field and not a contract.
+
 ## `bronze.raw_titled`
 
 `username`, `title`, plus lineage. The player universe seed.

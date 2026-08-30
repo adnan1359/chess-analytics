@@ -1,0 +1,71 @@
+# Single source of truth for business vocabulary shared by the batch SQL
+# (sql/silver, sql/gold) and the Python transforms (src/chess_analytics/transforms).
+#
+# Two consumers means two chances to drift, so tests/test_mapping_drift.py
+# asserts every code below actually appears in the SQL that maps it. Add a code
+# here and the test tells you which SQL file still needs it.
+
+# ---------------------------------------------------------------------------
+# Chess.com encodes the outcome per side: exactly one of white.result /
+# black.result is "win", and the other carries the *reason* the game ended.
+# For draws BOTH sides carry the same draw reason. So the reason code is always
+#   IF(white.result = 'win', black.result, white.result)
+# and that single code determines our `termination` category.
+# ---------------------------------------------------------------------------
+result_reason_to_termination:
+  # decisive
+  checkmated: checkmate
+  resigned: resignation
+  timeout: timeout
+  abandoned: abandonment
+  # draws
+  agreed: draw_agreed
+  repetition: draw_repetition
+  stalemate: draw_stalemate
+  insufficient: draw_insufficient_material
+  50move: draw_50_move
+  timevsinsufficient: draw_timeout_vs_insufficient
+  # decisive, variant/threshold rules (kept for completeness; we filter to
+  # rules='chess' in Silver so these should be rare-to-absent)
+  kingofthehill: variant_objective
+  threecheck: variant_objective
+  bughousepartnerlose: variant_partner_lost
+
+# Which terminations mean "nobody won". Drives is_draw and draw-rate metrics.
+draw_terminations:
+  - draw_agreed
+  - draw_repetition
+  - draw_stalemate
+  - draw_insufficient_material
+  - draw_50_move
+  - draw_timeout_vs_insufficient
+
+# ---------------------------------------------------------------------------
+# Elo brackets. NOTE: the plan's original <1500 / 1500-2000 / 2000+ split is
+# useless for THIS dataset — we seed the player universe from titled players,
+# so ~all rows land in a single "2000+" bucket. These finer brackets actually
+# discriminate within a titled-player population. Revisit if the seed widens.
+# ---------------------------------------------------------------------------
+elo_brackets:
+  - {label: "u2000",     min: 0,    max: 1999}
+  - {label: "2000_2199", min: 2000, max: 2199}
+  - {label: "2200_2399", min: 2200, max: 2399}
+  - {label: "2400_2599", min: 2400, max: 2599}
+  - {label: "2600_2799", min: 2600, max: 2799}
+  - {label: "2800_plus", min: 2800, max: 9999}
+
+# ECO volumes (A-E) are the standard Encyclopaedia of Chess Openings groupings.
+# Gives Gold a coarse opening-family dimension without a huge lookup table.
+eco_volumes:
+  A: Flank openings
+  B: Semi-open games (excl. French)
+  C: Open games and French
+  D: Closed and semi-closed games
+  E: Indian defences
+
+# Chess.com time_class values we expect. Anything else -> 'unknown' in Silver.
+time_classes:
+  - bullet
+  - blitz
+  - rapid
+  - daily
