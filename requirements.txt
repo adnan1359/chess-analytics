@@ -1,0 +1,14 @@
+# Core ingestion (Sprint 1) — runs locally with no GCP required.
+requests==2.32.3
+PyYAML==6.0.2
+tenacity==9.0.0
+# Only needed behind a TLS-inspecting corporate proxy (see config api.use_os_trust_store).
+truststore==0.10.1
+
+# GCP clients (Sprints 2-3). Imported lazily so Sprint 1 runs without them.
+google-cloud-storage==2.18.2
+google-cloud-bigquery==3.25.0
+google-cloud-pubsub==2.23.0
+
+# Dev / test
+pytest==8.3.3

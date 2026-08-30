@@ -1,0 +1,81 @@
+# Architecture & Sprint Plan
+
+## Problem statement
+
+Build a real-time **and** batch analytics platform for Chess.com game data:
+ingest live-style game events, enrich with player profiles, compute live
+dashboards (game stats, Elo tracking), and produce daily batch analytics
+(opening analysis, win-rate trends, cohorts) — on GCP, with data-engineering
+rigor.
+
+## Data source strategy
+
+Chess.com exposes a **free, unauthenticated** public API (`/pub`):
+
+| Endpoint | Use |
+|---|---|
+| `/pub/player/{u}` | profile |
+| `/pub/player/{u}/games/{YYYY}/{MM}` | monthly game archive (PGN + metadata) |
+| `/pub/player/{u}/stats` | ratings, W/L/D by format |
+| `/pub/titled/{TITLE}` | all players of a title |
+| `/pub/leaderboards` | top players per format |
+
+There is **no public streaming/WebSocket API**, so the streaming layer (Sprint 3)
+is a **game-event simulator** that replays real archived games move-by-move into
+Pub/Sub — the standard "replay real data as live events" pattern.
+
+## Architecture
+
+```
+ Chess.com API ──(batch pull)──▶ GCS raw landing ──▶ BigQuery Bronze (external)
+        │                                                     │
+        └──(replay)──▶ Game Event Simulator (Cloud Run)       ▼
+                              │                          Silver (clean, dedup)
+                              ▼                                │
+                       Pub/Sub topic ──▶ Dataflow ──▶ BQ Streaming    ▼
+                              │            (Beam)                  Gold (KPIs)
+                              ▼                                       │
+                         Pub/Sub DLQ                            Looker Studio
+ Orchestration: Cloud Composer (Airflow) — daily batch ETL, backfill, DQ.
+```
+
+## Medallion layers (BigQuery)
+
+- **Bronze** — external tables over raw NDJSON in GCS; verbatim payload +
+  lineage. See [`schemas/bronze_schemas.md`](schemas/bronze_schemas.md).
+- **Silver** — `clean_games` (typed, deduped on game id, result/termination
+  derived from PGN + per-side result codes), `dim_players`, `game_moves`,
+  `openings_dim`.
+- **Gold** — `daily_player_kpis`, `opening_win_rates` (by Elo bracket),
+  `elo_trend_weekly`, `player_cohorts`, `time_control_meta`.
+
+## Engineering practices (the point of the project)
+
+| Concern | Approach |
+|---|---|
+| Idempotency | partition-level overwrite (batch); `event_id` dedup (stream) |
+| Late data | Dataflow watermark + side-output to `late_events` |
+| SCD | Type-2 `dim_players` for Elo history |
+| Data quality | SQL assertions (null rate, Elo range, valid results, no future dates) |
+| Backfill | Airflow DAG parameterized by `(start_date, end_date)` |
+| Dead-letter | Pub/Sub DLQ for poison messages |
+| Observability | `ops.pipeline_runs`, DQ dashboards, Cloud Monitoring alerts |
+| Cost | external Bronze, partition pruning, Dataflow autoscaling, budget alerts |
+| IaC / CI-CD | Terraform for all resources; Cloud Build on push to `main` |
+
+## Sprint plan
+
+1. **Foundation & ingestion** — GCP/APIs, pull titled players + profiles +
+   archives, land in GCS, Bronze schemas. ✅
+2. **Batch pipeline** — Bronze→Silver→Gold SQL, Airflow DAG, idempotent MERGE.
+3. **Streaming** — simulator on Cloud Run, Pub/Sub, Dataflow streaming job.
+4. **DQ, monitoring, SCD-2** — assertion framework, dim_players, DLQ, alerts.
+5. **Analytics & dashboards** — 4 Looker Studio dashboards.
+6. **Hardening** — Terraform, CI/CD, cost controls, docs, portfolio polish.
+
+## Cost notes
+
+BigQuery (1 TB query / 10 GB storage free), GCS (5 GB), Pub/Sub (10 GB/mo), and
+Cloud Run (2M req/mo) fit the free tier. Dataflow and Composer are **not** free —
+use minimal workers / smallest Composer env, or run Airflow locally in Docker and
+drive GCP via client libraries. The architecture is identical either way.

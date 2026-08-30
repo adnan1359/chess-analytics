@@ -1,0 +1,43 @@
+# Chess.com Analytics Platform — central config.
+# Override any value with an env var: CHESS_<UPPER_SNAKE_PATH>, e.g.
+#   CHESS_INGESTION__ARCHIVE_MONTHS=3   ->  ingestion.archive_months
+# Env overrides let the same code run locally, in Airflow, and in Cloud Run.
+
+project:
+  name: chess-analytics
+  gcp_project_id: chess-analytics-dev      # placeholder; set real id via CHESS_PROJECT__GCP_PROJECT_ID
+
+api:
+  base_url: https://api.chess.com/pub
+  # Chess.com is Cloudflare-fronted and returns 403 without a descriptive
+  # User-Agent. They ask for a contact address so they can reach you before
+  # rate-limiting. This is the user's own email (identification only).
+  user_agent: "chess-analytics-platform/0.1 (contact: adnan.anam2@cognizant.com)"
+  timeout_sec: 30
+  # Behind a corporate TLS-inspecting proxy (Zscaler, Netskope, ...) requests'
+  # bundled CA won't trust the proxy's root. true => use the OS trust store,
+  # which already has the corporate root installed. No effect on GCP/home nets.
+  use_os_trust_store: true
+  # Chess.com has no published rate limit but 429s on parallel bursts.
+  # Serial requests with a small delay are the documented-safe pattern.
+  min_interval_sec: 0.25
+  max_retries: 5
+
+storage:
+  # backend: "local" writes to ./data ; "gcs" writes to the bucket below.
+  backend: local
+  local_root: ./data
+  gcs_bucket: chess-lakehouse
+  # Landing-zone layout (Hive-style partitioning, mirrored local & GCS):
+  #   raw/games/year=YYYY/month=MM/player=<username>.json
+  #   raw/players/profiles/<username>.json
+  #   raw/players/stats/<username>.json
+  #   raw/titled/<title>.json
+  raw_prefix: raw
+
+ingestion:
+  titled_categories: [GM, IM, FM, WGM, WIM]
+  # How many top players to pull full game archives for (Sprint 1 target: 200).
+  top_players: 200
+  # Most recent N months of archives per player.
+  archive_months: 6

@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local data landing zone (mirrors gs://chess-lakehouse/raw). Never commit data.
+data/
+*.json
+*.pgn
+!config/**/*.json
+
+# Secrets / credentials
+.env
+*-key.json
+service-account*.json
+gcp-credentials*.json
+
+# GCP / Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
