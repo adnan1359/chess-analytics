@@ -36,6 +36,45 @@ storage:
   #   raw/titled/<title>.json
   raw_prefix: raw
 
+streaming:
+  # Pub/Sub. The DLQ topic catches messages the subscription fails to deliver
+  # (see docs: that is a different failure mode from a schema-invalid event,
+  # which the Dataflow pipeline routes to its own side output).
+  topic: chess-game-events
+  dlq_topic: chess-game-events-dlq
+  subscription: chess-game-events-dataflow
+  # Moves for one game must arrive in order, so the publisher sets
+  # ordering_key = game_id. Requires message ordering on the subscription too.
+  enable_ordering: true
+
+  # publisher backend: "pubsub" | "memory" (tests) | "stdout" (local demo)
+  publisher: stdout
+
+  simulator:
+    # How many games are "in progress" at once. Real traffic is many concurrent
+    # games, not one game at a time — this is what makes the windowed
+    # aggregates non-trivial.
+    concurrent_games: 5
+    # Wall-clock seconds between consecutive moves of the SAME game, before the
+    # speed multiplier. Randomised in this range to imitate think time.
+    move_delay_min_sec: 0.5
+    move_delay_max_sec: 3.0
+    # >1 compresses time so a demo produces useful volume quickly.
+    speed_multiplier: 1.0
+    # 0 = unlimited; otherwise stop after this many games (keeps demos bounded).
+    max_games: 20
+
+  dataflow:
+    # Events later than this past the watermark go to the late-events side
+    # output instead of silently corrupting a closed window.
+    allowed_lateness_sec: 120
+    # Session gap for grouping a game's moves into one game-session window.
+    session_gap_sec: 300
+    # Fixed window for platform-wide throughput metrics (moves/min).
+    metrics_window_sec: 60
+    # Dedup horizon for event_id. Must exceed the expected redelivery window.
+    dedup_window_sec: 600
+
 ingestion:
   titled_categories: [GM, IM, FM, WGM, WIM]
   # How many top players to pull full game archives for (Sprint 1 target: 200).

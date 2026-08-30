@@ -22,7 +22,10 @@ Chess.com exposes a **free, unauthenticated** public API (`/pub`):
 
 There is **no public streaming/WebSocket API**, so the streaming layer (Sprint 3)
 is a **game-event simulator** that replays real archived games move-by-move into
-Pub/Sub — the standard "replay real data as live events" pattern.
+Pub/Sub — the standard "replay real data as live events" pattern. Every emitted
+event is explicitly flagged `is_simulated = TRUE` and retains the original game
+date, so replayed traffic can never be presented as live play. Detail:
+[`streaming.md`](streaming.md).
 
 ## Architecture
 
@@ -92,8 +95,12 @@ the intended pre-deploy gate.
    archives, land in GCS, Bronze schemas. ✅
 2. **Batch pipeline** — Bronze→Silver→Gold SQL, Airflow DAG, idempotent MERGE,
    DQ assertion framework, PGN parser. ✅
-3. **Streaming** — simulator on Cloud Run, Pub/Sub, Dataflow streaming job.
-4. **DQ, monitoring, SCD-2** — assertion framework, dim_players, DLQ, alerts.
+3. **Streaming** — simulator on Cloud Run, Pub/Sub + DLQ, Dataflow job with
+   dedup, session + fixed windows, and late-data capture. ✅
+   Detail: [`streaming.md`](streaming.md).
+4. **Monitoring & SCD-2** — `dim_players_history` (Type 2), Cloud Monitoring
+   alerts, backfill hardening. (The DQ assertion framework and DLQ landed early,
+   in Sprints 2 and 3.)
 5. **Analytics & dashboards** — 4 Looker Studio dashboards.
 6. **Hardening** — Terraform, CI/CD, cost controls, docs, portfolio polish.
 

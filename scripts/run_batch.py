@@ -34,6 +34,11 @@ log = get_logger("run_batch")
 # (layer, sql file, needs the date window) in dependency order — mirrors the DAG.
 PIPELINE: list[tuple[str, str, bool]] = [
     ("ops",    "ops/pipeline_runs.sql",            False),
+    # Streaming sinks are infrastructure (CREATE TABLE IF NOT EXISTS), not part
+    # of the daily batch graph — the Dataflow job writes to them continuously
+    # and must never wait on a batch run. They live here so there is exactly one
+    # tool that deploys BigQuery objects: `--layers streaming` creates them once.
+    ("streaming", "streaming/live_game_events.sql", False),
     ("bronze", "bronze/raw_games.sql",             False),
     ("bronze", "bronze/raw_players.sql",           False),
     ("silver", "silver/clean_games.sql",           True),
@@ -59,7 +64,8 @@ def main() -> int:
     ap.add_argument("--start", required=True, type=_parse_date, help="Window start (YYYY-MM-DD).")
     ap.add_argument("--end", required=True, type=_parse_date, help="Window end, inclusive.")
     ap.add_argument("--layers", nargs="*", default=["ops", "bronze", "silver", "gold", "dq"],
-                    help="Subset of layers to run.")
+                    help="Subset of layers to run. 'streaming' is excluded by default: "
+                         "it is one-time DDL, not part of the daily run.")
     ap.add_argument("--dry-run", action="store_true",
                     help="Validate against BigQuery and report bytes scanned; execute nothing.")
     args = ap.parse_args()

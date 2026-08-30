@@ -15,3 +15,8 @@ where = ["src"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    # Beam's DirectRunner takes ~85s for the streaming suite. Skip during tight
+    # loops with `-m "not slow"`; CI should always run everything.
+    "slow: tests that spin up an Apache Beam pipeline",
+]

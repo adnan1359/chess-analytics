@@ -10,6 +10,10 @@ google-cloud-storage==2.18.2
 google-cloud-bigquery==3.25.0
 google-cloud-pubsub==2.23.0
 
+# Streaming (Sprint 3). Only needed to run/test the Dataflow job; the simulator
+# itself needs just pubsub (see simulator/requirements.txt for the slim image).
+apache-beam[gcp]==2.75.0
+
 # Dev / test
 pytest==8.3.3
 # Parses the BigQuery SQL offline so typos are caught without a GCP connection.

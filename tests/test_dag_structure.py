@@ -56,17 +56,43 @@ def test_every_referenced_sql_file_exists(source):
     assert not missing, f"DAG references SQL that does not exist: {missing}"
 
 
-def test_all_pipeline_sql_is_referenced_by_the_dag(source):
-    """Nothing in sql/ is orphaned — every model is actually orchestrated."""
-    referenced = {
+def _sql_literals(source: str) -> set[str]:
+    return {
         node.value
         for node in ast.walk(ast.parse(source))
         if isinstance(node, ast.Constant)
         and isinstance(node.value, str)
         and node.value.endswith(".sql")
     }
-    on_disk = {str(p.relative_to(SQL_ROOT)).replace("\\", "/") for p in SQL_ROOT.rglob("*.sql")}
-    assert on_disk - referenced == set(), f"SQL not orchestrated by the DAG: {sorted(on_disk - referenced)}"
+
+
+def test_all_batch_sql_is_referenced_by_the_dag(source):
+    """No batch model is orphaned — every one is actually orchestrated.
+
+    `sql/streaming/` is excluded on purpose: those are continuously-written
+    Dataflow sinks, so making them wait on a daily batch task would be wrong.
+    The next test proves they are still deployed by something.
+    """
+    referenced = _sql_literals(source)
+    on_disk = {
+        str(p.relative_to(SQL_ROOT)).replace("\\", "/")
+        for p in SQL_ROOT.rglob("*.sql")
+        if p.parent.name != "streaming"
+    }
+    orphaned = on_disk - referenced
+    assert not orphaned, f"batch SQL not orchestrated by the DAG: {sorted(orphaned)}"
+
+
+def test_streaming_sql_is_deployed_by_the_batch_runner():
+    """Streaming DDL must be deployed by exactly one tool, not left to a README."""
+    runner = (REPO / "scripts" / "run_batch.py").read_text(encoding="utf-8")
+    referenced = _sql_literals(runner)
+    streaming = {
+        str(p.relative_to(SQL_ROOT)).replace("\\", "/")
+        for p in (SQL_ROOT / "streaming").rglob("*.sql")
+    }
+    assert streaming, "expected streaming DDL to exist"
+    assert streaming <= referenced, f"undeployed streaming SQL: {sorted(streaming - referenced)}"
 
 
 def test_window_scoped_models_receive_date_params(source):

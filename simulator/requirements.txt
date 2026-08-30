@@ -1,0 +1,5 @@
+# Simulator container deps only — deliberately minimal.
+# No BigQuery client, no Beam, no requests: the simulator reads landed files and
+# publishes to Pub/Sub. Nothing else.
+PyYAML==6.0.2
+google-cloud-pubsub==2.23.0

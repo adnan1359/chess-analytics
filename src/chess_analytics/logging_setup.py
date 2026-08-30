@@ -31,7 +31,10 @@ def get_logger(name: str) -> logging.Logger:
         return logger
 
     level = os.environ.get("CHESS_LOG_LEVEL", "INFO").upper()
-    handler = logging.StreamHandler(sys.stdout)
+    # stderr, not stdout: the StdoutPublisher emits the event feed as NDJSON on
+    # stdout, so log lines there would corrupt it and break piping. Cloud
+    # Logging and Dataflow capture both streams, so nothing is lost in the cloud.
+    handler = logging.StreamHandler(sys.stderr)
     if os.environ.get("CHESS_LOG_JSON", "").lower() in ("1", "true", "yes"):
         handler.setFormatter(_JsonFormatter())
     else:

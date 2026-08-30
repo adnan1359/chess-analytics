@@ -24,6 +24,26 @@ def games() -> list[dict]:
 # --------------------------------------------------------------------------- #
 # Header / movetext splitting
 # --------------------------------------------------------------------------- #
+def test_fixture_end_time_agrees_with_pgn_date_header(games):
+    """Guards a fixture bug class, not the parser.
+
+    Silver derives `game_date` from the epoch `end_time` while the landing-zone
+    partition comes from the archive month. If a fixture's epoch disagreed with
+    its PGN [Date] header, tests built on it would encode the wrong expectation
+    — which is exactly what happened once already.
+    """
+    from datetime import datetime, timezone
+
+    for game in games:
+        header_date = P.parse_headers(game["pgn"])["Date"].replace(".", "-")
+        epoch_date = datetime.fromtimestamp(game["end_time"], tz=timezone.utc).date()
+        assert epoch_date.isoformat() == header_date, (
+            f"{game['url']}: end_time -> {epoch_date}, but PGN [Date] says {header_date}"
+        )
+        # And both must fall in the month the fixture filename claims.
+        assert (epoch_date.year, epoch_date.month) == (2026, 8)
+
+
 def test_headers_parsed(games):
     headers = P.parse_headers(games[0]["pgn"])
     assert headers["ECO"] == "B90"
